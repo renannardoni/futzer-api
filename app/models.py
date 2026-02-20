@@ -33,10 +33,11 @@ class QuadraBase(BaseModel):
     descricao: str
     endereco: Endereco
     coordenadas: Coordenadas
-    preco_por_hora: float = Field(..., alias="precoPorHora")
+    preco_por_hora: Optional[float] = Field(None, alias="precoPorHora")
     tipo_piso: str = Field(..., alias="tipoPiso")
     imagem_capa: str = Field(..., alias="imagemCapa")
     avaliacao: float = 0.0
+    telefone: Optional[str] = None
     owner_id: Optional[str] = None
 
     class Config:
@@ -65,9 +66,13 @@ class QuadraCreate(QuadraBase):
 class QuadraUpdate(BaseModel):
     nome: Optional[str] = None
     descricao: Optional[str] = None
+    endereco: Optional[Endereco] = None
+    coordenadas: Optional[Coordenadas] = None
     preco_por_hora: Optional[float] = Field(None, alias="precoPorHora")
     tipo_piso: Optional[str] = Field(None, alias="tipoPiso")
     imagem_capa: Optional[str] = Field(None, alias="imagemCapa")
+    avaliacao: Optional[float] = None
+    telefone: Optional[str] = None
 
     class Config:
         populate_by_name = True

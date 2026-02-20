@@ -35,6 +35,7 @@ async def list_quadras(
             tipoPiso=q.get("tipoPiso", q.get("tipo_piso")),
             imagemCapa=q.get("imagemCapa", q.get("imagem_capa")),
             avaliacao=q.get("avaliacao", 0.0),
+            telefone=q.get("telefone"),
             owner_id=q.get("owner_id"),
             created_at=q["created_at"],
             updated_at=q["updated_at"]
@@ -61,6 +62,7 @@ async def get_quadra(quadra_id: str, db = Depends(get_database)):
         tipoPiso=quadra.get("tipoPiso", quadra.get("tipo_piso")),
         imagemCapa=quadra.get("imagemCapa", quadra.get("imagem_capa")),
         avaliacao=quadra.get("avaliacao", 0.0),
+        telefone=quadra.get("telefone"),
         owner_id=quadra.get("owner_id"),
         created_at=quadra["created_at"],
         updated_at=quadra["updated_at"]
@@ -69,13 +71,12 @@ async def get_quadra(quadra_id: str, db = Depends(get_database)):
 @router.post("/", response_model=Quadra, status_code=status.HTTP_201_CREATED)
 async def create_quadra(
     quadra: QuadraCreate,
-    current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
     from datetime import datetime
     
     quadra_dict = quadra.dict(by_alias=True)
-    quadra_dict["owner_id"] = str(current_user.id)
+    quadra_dict["owner_id"] = "admin"
     quadra_dict["created_at"] = datetime.utcnow()
     quadra_dict["updated_at"] = datetime.utcnow()
     
@@ -92,6 +93,7 @@ async def create_quadra(
         tipoPiso=created_quadra.get("tipoPiso", created_quadra.get("tipo_piso")),
         imagemCapa=created_quadra.get("imagemCapa", created_quadra.get("imagem_capa")),
         avaliacao=created_quadra.get("avaliacao", 0.0),
+        telefone=created_quadra.get("telefone"),
         owner_id=created_quadra.get("owner_id"),
         created_at=created_quadra["created_at"],
         updated_at=created_quadra["updated_at"]
@@ -101,18 +103,16 @@ async def create_quadra(
 async def update_quadra(
     quadra_id: str,
     quadra_update: QuadraUpdate,
-    current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
+    from datetime import datetime
+
     if not ObjectId.is_valid(quadra_id):
         raise HTTPException(status_code=400, detail="Invalid ID format")
     
     existing_quadra = await db.quadras.find_one({"_id": ObjectId(quadra_id)})
     if not existing_quadra:
         raise HTTPException(status_code=404, detail="Quadra not found")
-    
-    if existing_quadra.get("owner_id") != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to update this quadra")
     
     update_data = {k: v for k, v in quadra_update.dict(by_alias=True, exclude_unset=True).items()}
     if update_data:
@@ -129,10 +129,11 @@ async def update_quadra(
         descricao=updated_quadra["descricao"],
         endereco=updated_quadra["endereco"],
         coordenadas=updated_quadra["coordenadas"],
-        precoPorHora=updated_quadra["preco_por_hora"],
-        tipoPiso=updated_quadra["tipo_piso"],
-        imagemCapa=updated_quadra["imagem_capa"],
+        precoPorHora=updated_quadra.get("precoPorHora", updated_quadra.get("preco_por_hora")),
+        tipoPiso=updated_quadra.get("tipoPiso", updated_quadra.get("tipo_piso")),
+        imagemCapa=updated_quadra.get("imagemCapa", updated_quadra.get("imagem_capa")),
         avaliacao=updated_quadra.get("avaliacao", 0.0),
+        telefone=updated_quadra.get("telefone"),
         owner_id=updated_quadra.get("owner_id"),
         created_at=updated_quadra["created_at"],
         updated_at=updated_quadra["updated_at"]
@@ -141,7 +142,6 @@ async def update_quadra(
 @router.delete("/{quadra_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_quadra(
     quadra_id: str,
-    current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
     if not ObjectId.is_valid(quadra_id):
@@ -150,9 +150,6 @@ async def delete_quadra(
     existing_quadra = await db.quadras.find_one({"_id": ObjectId(quadra_id)})
     if not existing_quadra:
         raise HTTPException(status_code=404, detail="Quadra not found")
-    
-    if existing_quadra.get("owner_id") != str(current_user.id):
-        raise HTTPException(status_code=403, detail="Not authorized to delete this quadra")
     
     await db.quadras.delete_one({"_id": ObjectId(quadra_id)})
     return None

@@ -1,8 +1,14 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .database import connect_to_mongo, close_mongo_connection
 from .routes import auth, quadras
+from .routes.upload import router as upload_router
+
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI(
     title="Futzer API",
@@ -31,6 +37,10 @@ async def shutdown_db_client():
 # Routes
 app.include_router(auth.router, prefix="/api")
 app.include_router(quadras.router, prefix="/api")
+app.include_router(upload_router, prefix="/api")
+
+# Static files (uploaded images)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 @app.get("/")
 async def root():
