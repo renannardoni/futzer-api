@@ -1,0 +1,44 @@
+async function createQuadra(event) {
+            event.preventDefault();
+            
+            if (!authToken) {
+                alert('Você precisa fazer login primeiro!');
+                return;
+            }
+
+            const comodidades = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
+
+            const data = {
+                nome: document.getElementById('qNome').value,
+                descricao: document.getElementById('qDescricao').value,
+                endereco: {
+                    rua: document.getElementById('qEndereco').value,
+                    cidade: document.getElementById('qCidade').value,
+                    estado: document.getElementById('qEstado').value,
+                    cep: document.getElementById('qCep').value
+                },
+                coordenadas: {
+                    lat: -23.5505,
+                    lng: -46.6333
+                },
+                precoPorHora: parseFloat(document.getElementById('qPreco').value),
+                tipoPiso: document.getElementById('qTipo').value,
+                imagemCapa: 'https://via.placeholder.com/800x600/667eea/ffffff?text=Quadra+' + encodeURIComponent(document.getElementById('qNome').value),
+                avaliacao: 5.0
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `
+                        <strong>✓ Quadra criada com sucesso!</strong>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                    document.getElementById('quadraForm').reset();
+                    loadQuadras();
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `<strong>✗ Erro:</strong> ${result.detail}`;
+                }
+            } catch (error)

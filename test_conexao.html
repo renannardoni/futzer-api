@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste de Conexão API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        #status {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        #log {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Teste de Conexão com API Futzer</h1>
+    
+    <div class="box">
+        <button onclick="testarConexao()">🚀 Testar Conexão</button>
+        <div id="status">Clique no botão para testar</div>
+    </div>
+
+    <div class="box">
+        <h3>📋 Log de Eventos:</h3>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        function log(mensagem) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${mensagem}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(mensagem);
+        }
+
+        async function testarConexao() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = '⏳ Testando...';
+            statusDiv.className = '';
+            
+            log('Iniciando teste de conexão...');
+            log('URL da API: http://localhost:8000');
+
+            try {
+                log('Fazendo requisição para /health...');
+                
+                const response = await fetch('http://localhost:8000/health', {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache'
+                });
+
+                log(`Status da resposta: ${response.status}`);
+                log(`Response OK: ${response.ok}`);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`Dados recebidos: ${JSON.stringify(data)}`);
+
+                    if (data.status === 'healthy') {
+                        statusDiv.textContent = '✅ API CONECTADA!';
+                        statusDiv.className = 'success';
+                        log('✅ Conexão bem-sucedida!');
+                    } else {
+                        statusDiv.textContent = '⚠️ API com problemas';
+                        statusDiv.className = 'error';
+                        log('⚠️ API respondeu mas status não é healthy');
+                    }
+                } else {
+                    statusDiv.textContent = '❌ Erro HTTP ' + response.status;
+                    statusDiv.className = 'error';
+                    log(`❌ Erro HTTP: ${response.status}`);
+                }
+
+            } catch (error) {
+                statusDiv.textContent = '❌ ERRO DE CONEXÃO';
+                statusDiv.className = 'error';
+                log(`❌ ERRO: ${error.message}`);
+                log(`Tipo do erro: ${error.name}`);
+                log(`Stack: ${error.stack}`);
+                
+                if (error.message.includes('Failed to fetch')) {
+                    log('⚠️ Possíveis causas:');
+                    log('   1. API não está rodando em http://localhost:8000');
+                    log('   2. Problema de CORS');
+                    log('   3. Firewall bloqueando a conexão');
+                }
+            }
+        }
+
+        // Testar automaticamente ao carregar
+        log('Página carregada!');
+        log('Testando conexão automática em 2 segundos...');
+        setTimeout(() => {
+            testarConexao();
+        }, 2000);
+    </script>
+</body>
+</html>
