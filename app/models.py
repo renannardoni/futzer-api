@@ -36,6 +36,7 @@ class QuadraBase(BaseModel):
     preco_por_hora: Optional[float] = Field(None, alias="precoPorHora")
     tipo_piso: str = Field(..., alias="tipoPiso")
     imagem_capa: str = Field(..., alias="imagemCapa")
+    imagens: List[str] = Field(default_factory=list, alias="imagens")
     avaliacao: float = 0.0
     telefone: Optional[str] = None
     owner_id: Optional[str] = None
@@ -71,6 +72,7 @@ class QuadraUpdate(BaseModel):
     preco_por_hora: Optional[float] = Field(None, alias="precoPorHora")
     tipo_piso: Optional[str] = Field(None, alias="tipoPiso")
     imagem_capa: Optional[str] = Field(None, alias="imagemCapa")
+    imagens: Optional[List[str]] = Field(None, alias="imagens")
     avaliacao: Optional[float] = None
     telefone: Optional[str] = None
 
