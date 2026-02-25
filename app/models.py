@@ -55,7 +55,7 @@ class QuadraBase(BaseModel):
                 },
                 "coordenadas": {"lat": -23.5505, "lng": -46.6333},
                 "precoPorHora": 150.00,
-                "tipoPiso": "society",
+                "tipoPiso": "futebol",
                 "imagemCapa": "https://example.com/image.jpg",
                 "avaliacao": 4.8
             }
