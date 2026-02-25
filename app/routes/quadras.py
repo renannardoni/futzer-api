@@ -7,6 +7,23 @@ from ..auth import get_current_active_user
 
 router = APIRouter(prefix="/quadras", tags=["quadras"])
 
+# Mapeia valores antigos de tipo_piso para os novos esportes
+_TIPO_PISO_MAP = {
+    "society": "futebol",
+    "grama": "futebol",
+    "salao": "futebol",
+    "quadra": "futebol",
+    "campo": "futebol",
+    "areia": "futebol",
+    "futebol": "futebol",
+    "tenis": "tenis",
+    "t\u00eanis": "tenis",
+}
+
+def _norm_tipo(q: dict) -> str:
+    raw = q.get("tipoPiso") or q.get("tipo_piso") or "futebol"
+    return _TIPO_PISO_MAP.get(raw.lower().strip(), raw)
+
 @router.get("/", response_model=List[Quadra])
 async def list_quadras(
     skip: int = 0,
@@ -32,7 +49,7 @@ async def list_quadras(
             endereco=q["endereco"],
             coordenadas=q["coordenadas"],
             precoPorHora=q.get("precoPorHora", q.get("preco_por_hora")),
-            tipoPiso=q.get("tipoPiso", q.get("tipo_piso")),
+            tipoPiso=_norm_tipo(q),
             imagemCapa=q.get("imagemCapa", q.get("imagem_capa")),
             imagens=q.get("imagens", []),
             avaliacao=q.get("avaliacao", 0.0),
@@ -60,7 +77,7 @@ async def get_quadra(quadra_id: str, db = Depends(get_database)):
         endereco=quadra["endereco"],
         coordenadas=quadra["coordenadas"],
         precoPorHora=quadra.get("precoPorHora", quadra.get("preco_por_hora")),
-        tipoPiso=quadra.get("tipoPiso", quadra.get("tipo_piso")),
+        tipoPiso=_norm_tipo(quadra),
         imagemCapa=quadra.get("imagemCapa", quadra.get("imagem_capa")),
         imagens=quadra.get("imagens", []),
         avaliacao=quadra.get("avaliacao", 0.0),
@@ -92,7 +109,7 @@ async def create_quadra(
         endereco=created_quadra["endereco"],
         coordenadas=created_quadra["coordenadas"],
         precoPorHora=created_quadra.get("precoPorHora", created_quadra.get("preco_por_hora")),
-        tipoPiso=created_quadra.get("tipoPiso", created_quadra.get("tipo_piso")),
+        tipoPiso=_norm_tipo(created_quadra),
         imagemCapa=created_quadra.get("imagemCapa", created_quadra.get("imagem_capa")),
         imagens=created_quadra.get("imagens", []),
         avaliacao=created_quadra.get("avaliacao", 0.0),
@@ -133,7 +150,7 @@ async def update_quadra(
         endereco=updated_quadra["endereco"],
         coordenadas=updated_quadra["coordenadas"],
         precoPorHora=updated_quadra.get("precoPorHora", updated_quadra.get("preco_por_hora")),
-        tipoPiso=updated_quadra.get("tipoPiso", updated_quadra.get("tipo_piso")),
+        tipoPiso=_norm_tipo(updated_quadra),
         imagemCapa=updated_quadra.get("imagemCapa", updated_quadra.get("imagem_capa")),
         imagens=updated_quadra.get("imagens", []),
         avaliacao=updated_quadra.get("avaliacao", 0.0),
