@@ -50,6 +50,7 @@ async def list_quadras(
             coordenadas=q["coordenadas"],
             precoPorHora=q.get("precoPorHora", q.get("preco_por_hora")),
             tipoPiso=_norm_tipo(q),
+            modalidade=q.get("modalidade", "aluguel"),
             imagemCapa=q.get("imagemCapa", q.get("imagem_capa")),
             imagens=q.get("imagens", []),
             avaliacao=q.get("avaliacao", 0.0),
@@ -78,16 +79,8 @@ async def get_quadra(quadra_id: str, db = Depends(get_database)):
         coordenadas=quadra["coordenadas"],
         precoPorHora=quadra.get("precoPorHora", quadra.get("preco_por_hora")),
         tipoPiso=_norm_tipo(quadra),
-        imagemCapa=quadra.get("imagemCapa", quadra.get("imagem_capa")),
-        imagens=quadra.get("imagens", []),
-        avaliacao=quadra.get("avaliacao", 0.0),
-        telefone=quadra.get("telefone"),
-        owner_id=quadra.get("owner_id"),
-        created_at=quadra["created_at"],
-        updated_at=quadra["updated_at"]
-    )
-
-@router.post("/", response_model=Quadra, status_code=status.HTTP_201_CREATED)
+        modalidade=quadra.get("modalidade", "aluguel"),
+        imagemCapa=quadra.get("imagemCapa", quadra.get("imagem_capa")),("/", response_model=Quadra, status_code=status.HTTP_201_CREATED)
 async def create_quadra(
     quadra: QuadraCreate,
     db = Depends(get_database)
@@ -110,6 +103,7 @@ async def create_quadra(
         coordenadas=created_quadra["coordenadas"],
         precoPorHora=created_quadra.get("precoPorHora", created_quadra.get("preco_por_hora")),
         tipoPiso=_norm_tipo(created_quadra),
+        modalidade=created_quadra.get("modalidade", "aluguel"),
         imagemCapa=created_quadra.get("imagemCapa", created_quadra.get("imagem_capa")),
         imagens=created_quadra.get("imagens", []),
         avaliacao=created_quadra.get("avaliacao", 0.0),
@@ -151,6 +145,7 @@ async def update_quadra(
         coordenadas=updated_quadra["coordenadas"],
         precoPorHora=updated_quadra.get("precoPorHora", updated_quadra.get("preco_por_hora")),
         tipoPiso=_norm_tipo(updated_quadra),
+        modalidade=updated_quadra.get("modalidade", "aluguel"),
         imagemCapa=updated_quadra.get("imagemCapa", updated_quadra.get("imagem_capa")),
         imagens=updated_quadra.get("imagens", []),
         avaliacao=updated_quadra.get("avaliacao", 0.0),
