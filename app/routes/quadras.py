@@ -80,7 +80,16 @@ async def get_quadra(quadra_id: str, db = Depends(get_database)):
         precoPorHora=quadra.get("precoPorHora", quadra.get("preco_por_hora")),
         tipoPiso=_norm_tipo(quadra),
         modalidade=quadra.get("modalidade", "aluguel"),
-        imagemCapa=quadra.get("imagemCapa", quadra.get("imagem_capa")),("/", response_model=Quadra, status_code=status.HTTP_201_CREATED)
+        imagemCapa=quadra.get("imagemCapa", quadra.get("imagem_capa")),
+        imagens=quadra.get("imagens", []),
+        avaliacao=quadra.get("avaliacao", 0.0),
+        telefone=quadra.get("telefone"),
+        owner_id=quadra.get("owner_id"),
+        created_at=quadra["created_at"],
+        updated_at=quadra["updated_at"]
+    )
+
+@router.post("/", response_model=Quadra, status_code=status.HTTP_201_CREATED)
 async def create_quadra(
     quadra: QuadraCreate,
     db = Depends(get_database)
