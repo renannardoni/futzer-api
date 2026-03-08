@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta, datetime
+from pydantic import BaseModel, EmailStr
 from ..models import User, UserCreate, Token
-from ..auth import get_password_hash, verify_password, create_access_token, get_current_user
+from ..auth import get_password_hash, verify_password, create_access_token, get_current_user, create_reset_token, verify_reset_token
 from ..database import get_database
 from ..config import settings
 
@@ -54,3 +55,67 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db = Depends(g
 @router.get("/me", response_model=User)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+@router.post("/forgot-password", status_code=200)
+async def forgot_password(body: ForgotPasswordRequest, db=Depends(get_database)):
+    user = await db.users.find_one({"email": body.email})
+    # Sempre retorna 200 para não vazar se o email existe
+    if not user:
+        return {"message": "Se este email estiver cadastrado, você receberá um link em breve."}
+
+    token = create_reset_token(body.email)
+    reset_url = f"{settings.frontend_url}/owner/reset-password?token={token}"
+
+    if settings.resend_api_key:
+        try:
+            import resend
+            resend.api_key = settings.resend_api_key
+            resend.Emails.send({
+                "from": settings.from_email,
+                "to": [body.email],
+                "subject": "Redefinir senha — Futzer",
+                "html": f"""
+                <div style="font-family:sans-serif;max-width:480px;margin:auto">
+                  <h2 style="color:#16a34a">Futzer</h2>
+                  <p>Recebemos um pedido para redefinir a senha da sua conta.</p>
+                  <p>Clique no botão abaixo para criar uma nova senha. O link expira em <strong>1 hora</strong>.</p>
+                  <a href="{reset_url}" style="display:inline-block;margin:20px 0;padding:12px 28px;background:#16a34a;color:white;border-radius:8px;text-decoration:none;font-weight:bold">
+                    Redefinir senha
+                  </a>
+                  <p style="color:#888;font-size:12px">Se você não solicitou isso, ignore este email.</p>
+                </div>
+                """,
+            })
+        except Exception:
+            pass  # Não expõe erro de envio ao cliente
+
+    return {"message": "Se este email estiver cadastrado, você receberá um link em breve."}
+
+
+@router.post("/reset-password", status_code=200)
+async def reset_password(body: ResetPasswordRequest, db=Depends(get_database)):
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="A senha deve ter pelo menos 6 caracteres")
+
+    email = verify_reset_token(body.token)
+    if not email:
+        raise HTTPException(status_code=400, detail="Link inválido ou expirado")
+
+    user = await db.users.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    await db.users.update_one(
+        {"email": email},
+        {"$set": {"hashed_password": get_password_hash(body.new_password)}}
+    )
+    return {"message": "Senha redefinida com sucesso"}

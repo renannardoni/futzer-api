@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     cors_origins: str = "http://localhost:3000"
+    resend_api_key: str = ""
+    from_email: str = "noreply@futzer.com.br"
+    frontend_url: str = "http://localhost:3000"
 
     class Config:
         env_file = ".env"

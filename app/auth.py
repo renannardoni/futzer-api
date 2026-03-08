@@ -54,6 +54,23 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get
         is_active=user["is_active"]
     )
 
+def create_reset_token(email: str) -> str:
+    expire = datetime.utcnow() + timedelta(hours=1)
+    return jwt.encode(
+        {"sub": email, "purpose": "reset", "exp": expire},
+        settings.secret_key,
+        algorithm=settings.algorithm
+    )
+
+def verify_reset_token(token: str) -> Optional[str]:
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        if payload.get("purpose") != "reset":
+            return None
+        return payload.get("sub")
+    except JWTError:
+        return None
+
 async def get_current_active_user(current_user: User = Depends(get_current_user)):
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
