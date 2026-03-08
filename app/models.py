@@ -18,6 +18,21 @@ class PyObjectId(ObjectId):
     def __get_pydantic_json_schema__(cls, core_schema, handler):
         return {"type": "string"}
 
+class HorarioDia(BaseModel):
+    aberto: bool = True
+    inicio: str = "08:00"
+    fim: str = "22:00"
+    intervalo: int = 60  # minutos por slot
+
+class HorariosSemanais(BaseModel):
+    seg: HorarioDia = Field(default_factory=HorarioDia)
+    ter: HorarioDia = Field(default_factory=HorarioDia)
+    qua: HorarioDia = Field(default_factory=HorarioDia)
+    qui: HorarioDia = Field(default_factory=HorarioDia)
+    sex: HorarioDia = Field(default_factory=HorarioDia)
+    sab: HorarioDia = Field(default_factory=HorarioDia)
+    dom: HorarioDia = Field(default_factory=HorarioDia)
+
 class Coordenadas(BaseModel):
     lat: float
     lng: float
@@ -41,6 +56,8 @@ class QuadraBase(BaseModel):
     avaliacao: float = 0.0
     telefone: Optional[str] = None
     owner_id: Optional[str] = None
+    horarios_semanais: HorariosSemanais = Field(default_factory=HorariosSemanais, alias="horariosSemanais")
+    datas_bloqueadas: List[str] = Field(default_factory=list, alias="datasBloqueadas")
 
     class Config:
         populate_by_name = True
@@ -77,6 +94,8 @@ class QuadraUpdate(BaseModel):
     imagens: Optional[List[str]] = Field(None, alias="imagens")
     avaliacao: Optional[float] = None
     telefone: Optional[str] = None
+    horarios_semanais: Optional[HorariosSemanais] = Field(None, alias="horariosSemanais")
+    datas_bloqueadas: Optional[List[str]] = Field(None, alias="datasBloqueadas")
 
     class Config:
         populate_by_name = True
