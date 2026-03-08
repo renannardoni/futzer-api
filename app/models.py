@@ -19,10 +19,7 @@ class PyObjectId(ObjectId):
         return {"type": "string"}
 
 class HorarioDia(BaseModel):
-    aberto: bool = True
-    inicio: str = "08:00"
-    fim: str = "22:00"
-    intervalo: int = 60  # minutos por slot
+    slots: List[int] = Field(default_factory=list)  # horas disponíveis ex: [8, 9, 14, 15]
 
 class HorariosSemanais(BaseModel):
     seg: HorarioDia = Field(default_factory=HorarioDia)
@@ -50,6 +47,7 @@ class QuadraBase(BaseModel):
     coordenadas: Coordenadas
     preco_por_hora: Optional[float] = Field(None, alias="precoPorHora")
     tipo_piso: str = Field(..., alias="tipoPiso")
+    cobertura: Optional[str] = Field(None, alias="cobertura")
     modalidade: Optional[str] = Field("aluguel", alias="modalidade")
     imagem_capa: str = Field(..., alias="imagemCapa")
     imagens: List[str] = Field(default_factory=list, alias="imagens")
@@ -89,6 +87,7 @@ class QuadraUpdate(BaseModel):
     coordenadas: Optional[Coordenadas] = None
     preco_por_hora: Optional[float] = Field(None, alias="precoPorHora")
     tipo_piso: Optional[str] = Field(None, alias="tipoPiso")
+    cobertura: Optional[str] = None
     modalidade: Optional[str] = Field(None, alias="modalidade")
     imagem_capa: Optional[str] = Field(None, alias="imagemCapa")
     imagens: Optional[List[str]] = Field(None, alias="imagens")

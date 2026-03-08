@@ -11,16 +11,21 @@ router = APIRouter(prefix="/quadras", tags=["quadras"])
 _TIPO_PISO_MAP = {
     "society": "futebol",
     "grama": "futebol",
-    "salao": "futebol",
+    "salao": "futsal",
     "quadra": "futebol",
     "campo": "futebol",
-    "areia": "areia",
-    "beach_tenis": "areia",
-    "futebolei": "areia",
-    "futvolei": "areia",
+    "areia": "beach_tenis",
+    "beach_tenis": "beach_tenis",
+    "futebolei": "volei",
+    "futvolei": "volei",
     "futebol": "futebol",
+    "futsal": "futsal",
     "tenis": "tenis",
     "tênis": "tenis",
+    "padel": "padel",
+    "volei": "volei",
+    "vôlei": "volei",
+    "basquete": "basquete",
 }
 
 def _norm_tipo(q: dict) -> str:
@@ -28,9 +33,17 @@ def _norm_tipo(q: dict) -> str:
     return _TIPO_PISO_MAP.get(raw.lower().strip(), raw)
 
 def _horarios_from_doc(q: dict) -> HorariosSemanais:
+    from ..models import HorarioDia
     raw = q.get("horariosSemanais") or q.get("horarios_semanais")
-    if raw:
-        return HorariosSemanais(**raw)
+    if raw and isinstance(raw, dict):
+        dias = {}
+        for key in ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]:
+            dia = raw.get(key, {})
+            if isinstance(dia, dict) and "slots" in dia:
+                dias[key] = HorarioDia(slots=dia["slots"])
+            else:
+                dias[key] = HorarioDia(slots=[])
+        return HorariosSemanais(**dias)
     return HorariosSemanais()
 
 def _to_quadra(q: dict) -> Quadra:
@@ -42,6 +55,7 @@ def _to_quadra(q: dict) -> Quadra:
         coordenadas=q["coordenadas"],
         precoPorHora=q.get("precoPorHora", q.get("preco_por_hora")),
         tipoPiso=_norm_tipo(q),
+        cobertura=q.get("cobertura"),
         modalidade=q.get("modalidade", "aluguel"),
         imagemCapa=q.get("imagemCapa", q.get("imagem_capa")),
         imagens=q.get("imagens", []),
