@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-key-change-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    admin_password: str = "futzer2406"
     cors_origins: str = "http://localhost:3000"
     resend_api_key: str = ""
     from_email: str = "noreply@futzer.com.br"

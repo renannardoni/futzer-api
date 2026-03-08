@@ -147,7 +147,7 @@ async def update_quadra(
     existing = await db.quadras.find_one({"_id": ObjectId(quadra_id)})
     if not existing:
         raise HTTPException(status_code=404, detail="Quadra not found")
-    if existing.get("owner_id") not in (current_user.id, "admin"):
+    if current_user.id != "admin" and existing.get("owner_id") != current_user.id:
         raise HTTPException(status_code=403, detail="Sem permissão")
     update_data = {k: v for k, v in quadra_update.dict(by_alias=True, exclude_unset=True).items()}
     if update_data:
@@ -167,7 +167,7 @@ async def delete_quadra(
     existing = await db.quadras.find_one({"_id": ObjectId(quadra_id)})
     if not existing:
         raise HTTPException(status_code=404, detail="Quadra not found")
-    if existing.get("owner_id") not in (current_user.id, "admin"):
+    if current_user.id != "admin" and existing.get("owner_id") != current_user.id:
         raise HTTPException(status_code=403, detail="Sem permissão")
     await db.quadras.delete_one({"_id": ObjectId(quadra_id)})
 
@@ -187,7 +187,7 @@ async def add_court(
     arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
     if not arena:
         raise HTTPException(404, "Arena not found")
-    if arena.get("owner_id") != current_user.id:
+    if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
         raise HTTPException(403, "Sem permissão")
 
     new_court = {
@@ -219,7 +219,7 @@ async def update_court(
     arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
     if not arena:
         raise HTTPException(404, "Arena not found")
-    if arena.get("owner_id") != current_user.id:
+    if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
         raise HTTPException(403, "Sem permissão")
 
     update_fields = {"updated_at": datetime.utcnow()}
@@ -247,7 +247,7 @@ async def delete_court(
     arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
     if not arena:
         raise HTTPException(404, "Arena not found")
-    if arena.get("owner_id") != current_user.id:
+    if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
         raise HTTPException(403, "Sem permissão")
     await db.quadras.update_one(
         {"_id": ObjectId(arena_id)},
@@ -271,7 +271,7 @@ async def add_booking(
     arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
     if not arena:
         raise HTTPException(404, "Arena not found")
-    if arena.get("owner_id") != current_user.id:
+    if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
         raise HTTPException(403, "Sem permissão")
 
     new_booking = {
@@ -301,7 +301,7 @@ async def delete_booking(
     arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
     if not arena:
         raise HTTPException(404, "Arena not found")
-    if arena.get("owner_id") != current_user.id:
+    if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
         raise HTTPException(403, "Sem permissão")
     await db.quadras.update_one(
         {"_id": ObjectId(arena_id)},

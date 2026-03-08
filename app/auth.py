@@ -42,10 +42,20 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get
     except JWTError:
         raise credentials_exception
 
+    # Virtual admin user (no DB record needed)
+    if token_data.email == "admin@futzer.com":
+        return User(
+            id="admin",
+            email="admin@futzer.com",
+            nome="Admin",
+            created_at=datetime.utcnow(),
+            is_active=True,
+        )
+
     user = await db.users.find_one({"email": token_data.email})
     if user is None:
         raise credentials_exception
-    
+
     return User(
         id=str(user["_id"]),
         email=user["email"],

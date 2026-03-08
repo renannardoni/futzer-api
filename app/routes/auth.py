@@ -57,6 +57,24 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+class AdminLoginRequest(BaseModel):
+    password: str
+
+
+@router.post("/admin-login", response_model=Token)
+async def admin_login(body: AdminLoginRequest):
+    if body.password != settings.admin_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Senha de admin incorreta",
+        )
+    access_token = create_access_token(
+        data={"sub": "admin@futzer.com"},
+        expires_delta=timedelta(hours=24),
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
