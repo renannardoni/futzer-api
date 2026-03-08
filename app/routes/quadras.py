@@ -1,40 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from bson import ObjectId
-from ..models import Quadra, QuadraCreate, QuadraUpdate, HorariosSemanais, User
+from ..models import Quadra, QuadraCreate, QuadraUpdate, HorariosSemanais, HorarioDia, SubQuadra, Reserva, User
 from ..database import get_database
 from ..auth import get_current_active_user
 
 router = APIRouter(prefix="/quadras", tags=["quadras"])
 
-# Mapeia valores antigos de tipo_piso para os novos esportes
 _TIPO_PISO_MAP = {
-    "society": "futebol",
-    "grama": "futebol",
-    "salao": "futsal",
-    "quadra": "futebol",
-    "campo": "futebol",
-    "areia": "beach_tenis",
-    "beach_tenis": "beach_tenis",
-    "futebolei": "volei",
-    "futvolei": "volei",
-    "futebol": "futebol",
-    "futsal": "futsal",
-    "tenis": "tenis",
-    "tênis": "tenis",
-    "padel": "padel",
-    "volei": "volei",
-    "vôlei": "volei",
-    "basquete": "basquete",
+    "society": "futebol", "grama": "futebol", "salao": "futsal",
+    "quadra": "futebol", "campo": "futebol", "areia": "beach_tenis",
+    "beach_tenis": "beach_tenis", "futebolei": "volei", "futvolei": "volei",
+    "futebol": "futebol", "futsal": "futsal", "tenis": "tenis",
+    "tênis": "tenis", "padel": "padel", "volei": "volei",
+    "vôlei": "volei", "basquete": "basquete",
 }
 
 def _norm_tipo(q: dict) -> str:
     raw = q.get("tipoPiso") or q.get("tipo_piso") or "futebol"
     return _TIPO_PISO_MAP.get(raw.lower().strip(), raw)
 
-def _horarios_from_doc(q: dict) -> HorariosSemanais:
-    from ..models import HorarioDia
-    raw = q.get("horariosSemanais") or q.get("horarios_semanais")
+def _horarios_from_doc(raw) -> HorariosSemanais:
     if raw and isinstance(raw, dict):
         dias = {}
         for key in ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]:
@@ -46,7 +32,30 @@ def _horarios_from_doc(q: dict) -> HorariosSemanais:
         return HorariosSemanais(**dias)
     return HorariosSemanais()
 
+def _subquadra_from_doc(d: dict) -> SubQuadra:
+    return SubQuadra(
+        id=d.get("id", ""),
+        nome=d.get("nome", "Quadra"),
+        tipoPiso=d.get("tipoPiso", "futebol"),
+        cobertura=d.get("cobertura", "descoberto"),
+        imagemCapa=d.get("imagemCapa"),
+        horariosSemanais=_horarios_from_doc(d.get("horariosSemanais")),
+    )
+
+def _reserva_from_doc(d: dict) -> Reserva:
+    return Reserva(
+        id=d.get("id", ""),
+        quadra_id=d.get("quadra_id", ""),
+        data=d.get("data", ""),
+        hora=d.get("hora", 0),
+        nome_cliente=d.get("nome_cliente", ""),
+        telefone=d.get("telefone"),
+    )
+
 def _to_quadra(q: dict) -> Quadra:
+    raw_horarios = q.get("horariosSemanais") or q.get("horarios_semanais")
+    quadras_internas = [_subquadra_from_doc(sq) for sq in q.get("quadrasInternas", [])]
+    reservas = [_reserva_from_doc(r) for r in q.get("reservas", [])]
     return Quadra(
         id=str(q["_id"]),
         nome=q["nome"],
@@ -62,12 +71,16 @@ def _to_quadra(q: dict) -> Quadra:
         avaliacao=q.get("avaliacao", 0.0),
         telefone=q.get("telefone"),
         owner_id=q.get("owner_id"),
-        horariosSemanais=_horarios_from_doc(q),
+        horariosSemanais=_horarios_from_doc(raw_horarios),
         datasBloqueadas=q.get("datasBloqueadas", q.get("datas_bloqueadas", [])),
+        quadrasInternas=quadras_internas,
+        reservas=reservas,
         created_at=q["created_at"],
-        updated_at=q["updated_at"]
+        updated_at=q["updated_at"],
     )
 
+
+# ── Arena CRUD ─────────────────────────────────────────────────────────────────
 
 @router.get("/minhas", response_model=List[Quadra])
 async def list_minhas_quadras(
@@ -81,10 +94,8 @@ async def list_minhas_quadras(
 
 @router.get("/", response_model=List[Quadra])
 async def list_quadras(
-    skip: int = 0,
-    limit: int = 100,
-    tipo_piso: Optional[str] = None,
-    cidade: Optional[str] = None,
+    skip: int = 0, limit: int = 100,
+    tipo_piso: Optional[str] = None, cidade: Optional[str] = None,
     db=Depends(get_database)
 ):
     query = {}
@@ -92,7 +103,6 @@ async def list_quadras(
         query["$or"] = [{"tipo_piso": tipo_piso}, {"tipoPiso": tipo_piso}]
     if cidade:
         query["endereco.cidade"] = {"$regex": cidade, "$options": "i"}
-
     cursor = db.quadras.find(query).skip(skip).limit(limit)
     quadras = await cursor.to_list(length=limit)
     return [_to_quadra(q) for q in quadras]
@@ -102,27 +112,24 @@ async def list_quadras(
 async def get_quadra(quadra_id: str, db=Depends(get_database)):
     if not ObjectId.is_valid(quadra_id):
         raise HTTPException(status_code=400, detail="Invalid ID format")
-
     quadra = await db.quadras.find_one({"_id": ObjectId(quadra_id)})
     if not quadra:
         raise HTTPException(status_code=404, detail="Quadra not found")
-
     return _to_quadra(quadra)
 
 
 @router.post("/", response_model=Quadra, status_code=status.HTTP_201_CREATED)
 async def create_quadra(
-    quadra: QuadraCreate,
-    db=Depends(get_database),
+    quadra: QuadraCreate, db=Depends(get_database),
     current_user: User = Depends(get_current_active_user)
 ):
     from datetime import datetime
-
     quadra_dict = quadra.dict(by_alias=True)
     quadra_dict["owner_id"] = current_user.id
     quadra_dict["created_at"] = datetime.utcnow()
     quadra_dict["updated_at"] = datetime.utcnow()
-
+    quadra_dict.setdefault("quadrasInternas", [])
+    quadra_dict.setdefault("reservas", [])
     result = await db.quadras.insert_one(quadra_dict)
     created = await db.quadras.find_one({"_id": result.inserted_id})
     return _to_quadra(created)
@@ -130,47 +137,174 @@ async def create_quadra(
 
 @router.put("/{quadra_id}", response_model=Quadra)
 async def update_quadra(
-    quadra_id: str,
-    quadra_update: QuadraUpdate,
+    quadra_id: str, quadra_update: QuadraUpdate,
     db=Depends(get_database),
     current_user: User = Depends(get_current_active_user)
 ):
     from datetime import datetime
-
     if not ObjectId.is_valid(quadra_id):
         raise HTTPException(status_code=400, detail="Invalid ID format")
-
     existing = await db.quadras.find_one({"_id": ObjectId(quadra_id)})
     if not existing:
         raise HTTPException(status_code=404, detail="Quadra not found")
-
     if existing.get("owner_id") not in (current_user.id, "admin"):
-        raise HTTPException(status_code=403, detail="Sem permissão para editar esta quadra")
-
+        raise HTTPException(status_code=403, detail="Sem permissão")
     update_data = {k: v for k, v in quadra_update.dict(by_alias=True, exclude_unset=True).items()}
     if update_data:
         update_data["updated_at"] = datetime.utcnow()
         await db.quadras.update_one({"_id": ObjectId(quadra_id)}, {"$set": update_data})
-
     updated = await db.quadras.find_one({"_id": ObjectId(quadra_id)})
     return _to_quadra(updated)
 
 
 @router.delete("/{quadra_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_quadra(
-    quadra_id: str,
-    db=Depends(get_database),
+    quadra_id: str, db=Depends(get_database),
     current_user: User = Depends(get_current_active_user)
 ):
     if not ObjectId.is_valid(quadra_id):
         raise HTTPException(status_code=400, detail="Invalid ID format")
-
     existing = await db.quadras.find_one({"_id": ObjectId(quadra_id)})
     if not existing:
         raise HTTPException(status_code=404, detail="Quadra not found")
-
     if existing.get("owner_id") not in (current_user.id, "admin"):
-        raise HTTPException(status_code=403, detail="Sem permissão para deletar esta quadra")
-
+        raise HTTPException(status_code=403, detail="Sem permissão")
     await db.quadras.delete_one({"_id": ObjectId(quadra_id)})
-    return None
+
+
+# ── Sub-courts (quadras internas) ───────────────────────────────────────────
+
+@router.post("/{arena_id}/courts", status_code=201)
+async def add_court(
+    arena_id: str, body: dict,
+    db=Depends(get_database),
+    current_user: User = Depends(get_current_active_user)
+):
+    from datetime import datetime
+    import uuid
+    if not ObjectId.is_valid(arena_id):
+        raise HTTPException(400, "Invalid ID")
+    arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
+    if not arena:
+        raise HTTPException(404, "Arena not found")
+    if arena.get("owner_id") != current_user.id:
+        raise HTTPException(403, "Sem permissão")
+
+    new_court = {
+        "id": str(uuid.uuid4()),
+        "nome": body.get("nome", "Nova Quadra"),
+        "tipoPiso": body.get("tipoPiso", "futebol"),
+        "cobertura": body.get("cobertura", "descoberto"),
+        "imagemCapa": body.get("imagemCapa"),
+        "horariosSemanais": body.get("horariosSemanais", {
+            k: {"slots": []} for k in ["seg","ter","qua","qui","sex","sab","dom"]
+        }),
+    }
+    await db.quadras.update_one(
+        {"_id": ObjectId(arena_id)},
+        {"$push": {"quadrasInternas": new_court}, "$set": {"updated_at": datetime.utcnow()}}
+    )
+    return new_court
+
+
+@router.put("/{arena_id}/courts/{court_id}")
+async def update_court(
+    arena_id: str, court_id: str, body: dict,
+    db=Depends(get_database),
+    current_user: User = Depends(get_current_active_user)
+):
+    from datetime import datetime
+    if not ObjectId.is_valid(arena_id):
+        raise HTTPException(400, "Invalid ID")
+    arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
+    if not arena:
+        raise HTTPException(404, "Arena not found")
+    if arena.get("owner_id") != current_user.id:
+        raise HTTPException(403, "Sem permissão")
+
+    update_fields = {"updated_at": datetime.utcnow()}
+    for field in ["nome", "tipoPiso", "cobertura", "imagemCapa", "horariosSemanais"]:
+        if field in body:
+            update_fields[f"quadrasInternas.$[c].{field}"] = body[field]
+
+    await db.quadras.update_one(
+        {"_id": ObjectId(arena_id)},
+        {"$set": update_fields},
+        array_filters=[{"c.id": court_id}]
+    )
+    return {"ok": True}
+
+
+@router.delete("/{arena_id}/courts/{court_id}", status_code=204)
+async def delete_court(
+    arena_id: str, court_id: str,
+    db=Depends(get_database),
+    current_user: User = Depends(get_current_active_user)
+):
+    from datetime import datetime
+    if not ObjectId.is_valid(arena_id):
+        raise HTTPException(400, "Invalid ID")
+    arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
+    if not arena:
+        raise HTTPException(404, "Arena not found")
+    if arena.get("owner_id") != current_user.id:
+        raise HTTPException(403, "Sem permissão")
+    await db.quadras.update_one(
+        {"_id": ObjectId(arena_id)},
+        {"$pull": {"quadrasInternas": {"id": court_id}},
+         "$set": {"updated_at": datetime.utcnow()}}
+    )
+
+
+# ── Bookings (reservas) ─────────────────────────────────────────────────────
+
+@router.post("/{arena_id}/bookings", status_code=201)
+async def add_booking(
+    arena_id: str, body: dict,
+    db=Depends(get_database),
+    current_user: User = Depends(get_current_active_user)
+):
+    from datetime import datetime
+    import uuid
+    if not ObjectId.is_valid(arena_id):
+        raise HTTPException(400, "Invalid ID")
+    arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
+    if not arena:
+        raise HTTPException(404, "Arena not found")
+    if arena.get("owner_id") != current_user.id:
+        raise HTTPException(403, "Sem permissão")
+
+    new_booking = {
+        "id": str(uuid.uuid4()),
+        "quadra_id": body["quadra_id"],
+        "data": body["data"],
+        "hora": body["hora"],
+        "nome_cliente": body["nome_cliente"],
+        "telefone": body.get("telefone"),
+    }
+    await db.quadras.update_one(
+        {"_id": ObjectId(arena_id)},
+        {"$push": {"reservas": new_booking}, "$set": {"updated_at": datetime.utcnow()}}
+    )
+    return new_booking
+
+
+@router.delete("/{arena_id}/bookings/{booking_id}", status_code=204)
+async def delete_booking(
+    arena_id: str, booking_id: str,
+    db=Depends(get_database),
+    current_user: User = Depends(get_current_active_user)
+):
+    from datetime import datetime
+    if not ObjectId.is_valid(arena_id):
+        raise HTTPException(400, "Invalid ID")
+    arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
+    if not arena:
+        raise HTTPException(404, "Arena not found")
+    if arena.get("owner_id") != current_user.id:
+        raise HTTPException(403, "Sem permissão")
+    await db.quadras.update_one(
+        {"_id": ObjectId(arena_id)},
+        {"$pull": {"reservas": {"id": booking_id}},
+         "$set": {"updated_at": datetime.utcnow()}}
+    )

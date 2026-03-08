@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List
 from datetime import datetime
 from bson import ObjectId
+import uuid as _uuid
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -30,6 +31,27 @@ class HorariosSemanais(BaseModel):
     sab: HorarioDia = Field(default_factory=HorarioDia)
     dom: HorarioDia = Field(default_factory=HorarioDia)
 
+# Quadra interna de uma Arena (ex: "Quadra 1", "Quadra 2")
+class SubQuadra(BaseModel):
+    id: str = Field(default_factory=lambda: str(_uuid.uuid4()))
+    nome: str = "Quadra 1"
+    tipoPiso: str = "futebol"
+    cobertura: str = "descoberto"
+    imagemCapa: Optional[str] = None
+    horariosSemanais: HorariosSemanais = Field(default_factory=HorariosSemanais)
+
+    class Config:
+        populate_by_name = True
+
+# Reserva de um horário em uma sub-quadra
+class Reserva(BaseModel):
+    id: str = Field(default_factory=lambda: str(_uuid.uuid4()))
+    quadra_id: str
+    data: str        # "2026-03-08"
+    hora: int        # 9
+    nome_cliente: str
+    telefone: Optional[str] = None
+
 class Coordenadas(BaseModel):
     lat: float
     lng: float
@@ -56,26 +78,11 @@ class QuadraBase(BaseModel):
     owner_id: Optional[str] = None
     horarios_semanais: HorariosSemanais = Field(default_factory=HorariosSemanais, alias="horariosSemanais")
     datas_bloqueadas: List[str] = Field(default_factory=list, alias="datasBloqueadas")
+    quadras_internas: List[SubQuadra] = Field(default_factory=list, alias="quadrasInternas")
+    reservas: List[Reserva] = Field(default_factory=list)
 
     class Config:
         populate_by_name = True
-        json_schema_extra = {
-            "example": {
-                "nome": "Arena Premium Sports",
-                "descricao": "Quadra de futebol society",
-                "endereco": {
-                    "rua": "Rua das Acácias, 123",
-                    "cidade": "São Paulo",
-                    "estado": "SP",
-                    "cep": "01234-567"
-                },
-                "coordenadas": {"lat": -23.5505, "lng": -46.6333},
-                "precoPorHora": 150.00,
-                "tipoPiso": "futebol",
-                "imagemCapa": "https://example.com/image.jpg",
-                "avaliacao": 4.8
-            }
-        }
 
 class QuadraCreate(QuadraBase):
     pass
