@@ -71,6 +71,7 @@ def _to_quadra(q: dict) -> Quadra:
         avaliacao=q.get("avaliacao", 0.0),
         telefone=q.get("telefone"),
         owner_id=q.get("owner_id"),
+        ativo=q.get("ativo", True),
         horariosSemanais=_horarios_from_doc(raw_horarios),
         datasBloqueadas=q.get("datasBloqueadas", q.get("datas_bloqueadas", [])),
         quadrasInternas=quadras_internas,
@@ -96,9 +97,10 @@ async def list_minhas_quadras(
 async def list_quadras(
     skip: int = 0, limit: int = 100,
     tipo_piso: Optional[str] = None, cidade: Optional[str] = None,
+    include_inativos: bool = False,
     db=Depends(get_database)
 ):
-    query = {}
+    query: dict = {} if include_inativos else {"ativo": {"$ne": False}}
     if tipo_piso and tipo_piso != "todos":
         query["$or"] = [{"tipo_piso": tipo_piso}, {"tipoPiso": tipo_piso}]
     if cidade:
@@ -170,6 +172,27 @@ async def delete_quadra(
     if current_user.id != "admin" and existing.get("owner_id") != current_user.id:
         raise HTTPException(status_code=403, detail="Sem permissão")
     await db.quadras.delete_one({"_id": ObjectId(quadra_id)})
+
+
+@router.patch("/{quadra_id}/toggle-ativo")
+async def toggle_ativo(
+    quadra_id: str, db=Depends(get_database),
+    current_user: User = Depends(get_current_active_user)
+):
+    from datetime import datetime
+    if not ObjectId.is_valid(quadra_id):
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+    existing = await db.quadras.find_one({"_id": ObjectId(quadra_id)})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Quadra not found")
+    if current_user.id != "admin" and existing.get("owner_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Sem permissão")
+    novo_ativo = not existing.get("ativo", True)
+    await db.quadras.update_one(
+        {"_id": ObjectId(quadra_id)},
+        {"$set": {"ativo": novo_ativo, "updated_at": datetime.utcnow()}}
+    )
+    return {"ativo": novo_ativo}
 
 
 # ── Sub-courts (quadras internas) ───────────────────────────────────────────
