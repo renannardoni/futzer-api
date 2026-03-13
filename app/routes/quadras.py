@@ -9,8 +9,8 @@ router = APIRouter(prefix="/quadras", tags=["quadras"])
 
 _TIPO_PISO_MAP = {
     "society": "futebol", "grama": "futebol", "salao": "futsal",
-    "quadra": "futebol", "campo": "futebol", "areia": "beach_tenis",
-    "beach_tenis": "beach_tenis", "futebolei": "volei", "futvolei": "volei",
+    "quadra": "futebol", "campo": "futebol", "areia": "areia",
+    "beach_tenis": "areia", "futebolei": "volei", "futvolei": "volei",
     "futebol": "futebol", "futsal": "futsal", "tenis": "tenis",
     "tênis": "tenis", "padel": "padel", "volei": "volei",
     "vôlei": "volei", "basquete": "basquete",
