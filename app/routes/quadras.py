@@ -331,3 +331,84 @@ async def delete_booking(
         {"$pull": {"reservas": {"id": booking_id}},
          "$set": {"updated_at": datetime.utcnow()}}
     )
+
+
+@router.post("/{arena_id}/bookings/recurrent", status_code=201)
+async def add_recurrent_booking(
+    arena_id: str, body: dict,
+    db=Depends(get_database),
+    current_user: User = Depends(get_current_active_user)
+):
+    from datetime import datetime, timedelta
+    from dateutil.relativedelta import relativedelta
+    import uuid
+
+    if not ObjectId.is_valid(arena_id):
+        raise HTTPException(400, "Invalid ID")
+    arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
+    if not arena:
+        raise HTTPException(404, "Arena not found")
+    if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
+        raise HTTPException(403, "Sem permissão")
+
+    quadra_id = body["quadra_id"]
+    hora = body["hora"]
+    nome_cliente = body["nome_cliente"]
+    telefone = body.get("telefone")
+    recorrencia = body["recorrencia"]  # "semanal" | "quinzenal" | "mensal"
+    data_inicio = body["data_inicio"]  # "2026-03-22"
+
+    grupo_id = str(uuid.uuid4())
+    start = datetime.strptime(data_inicio, "%Y-%m-%d")
+    end = start + relativedelta(months=6)
+
+    bookings = []
+    current = start
+    while current < end:
+        bookings.append({
+            "id": str(uuid.uuid4()),
+            "quadra_id": quadra_id,
+            "data": current.strftime("%Y-%m-%d"),
+            "hora": hora,
+            "nome_cliente": nome_cliente,
+            "telefone": telefone,
+            "recorrencia": recorrencia,
+            "recorrencia_grupo_id": grupo_id,
+        })
+        if recorrencia == "semanal":
+            current += timedelta(weeks=1)
+        elif recorrencia == "quinzenal":
+            current += timedelta(weeks=2)
+        elif recorrencia == "mensal":
+            current += relativedelta(months=1)
+        else:
+            break
+
+    if bookings:
+        await db.quadras.update_one(
+            {"_id": ObjectId(arena_id)},
+            {"$push": {"reservas": {"$each": bookings}},
+             "$set": {"updated_at": datetime.utcnow()}}
+        )
+    return {"grupo_id": grupo_id, "count": len(bookings), "bookings": bookings}
+
+
+@router.delete("/{arena_id}/bookings/group/{grupo_id}", status_code=204)
+async def delete_booking_group(
+    arena_id: str, grupo_id: str,
+    db=Depends(get_database),
+    current_user: User = Depends(get_current_active_user)
+):
+    from datetime import datetime
+    if not ObjectId.is_valid(arena_id):
+        raise HTTPException(400, "Invalid ID")
+    arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
+    if not arena:
+        raise HTTPException(404, "Arena not found")
+    if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
+        raise HTTPException(403, "Sem permissão")
+    await db.quadras.update_one(
+        {"_id": ObjectId(arena_id)},
+        {"$pull": {"reservas": {"recorrencia_grupo_id": grupo_id}},
+         "$set": {"updated_at": datetime.utcnow()}}
+    )

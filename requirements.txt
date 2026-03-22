@@ -12,3 +12,4 @@ pymongo==4.9.0
 aiofiles==24.1.0
 cloudinary==1.41.0
 resend==2.23.0
+python-dateutil==2.9.0

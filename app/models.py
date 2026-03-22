@@ -51,6 +51,8 @@ class Reserva(BaseModel):
     hora: int        # 9
     nome_cliente: str
     telefone: Optional[str] = None
+    recorrencia: Optional[str] = None          # "semanal" | "quinzenal" | "mensal"
+    recorrencia_grupo_id: Optional[str] = None # UUID para agrupar reservas recorrentes
 
 class Coordenadas(BaseModel):
     lat: float
