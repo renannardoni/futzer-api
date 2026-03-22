@@ -368,10 +368,11 @@ async def add_recurrent_booking(
     telefone = body.get("telefone")
     recorrencia = body["recorrencia"]  # "semanal" | "quinzenal" | "mensal"
     data_inicio = body["data_inicio"]  # "2026-03-22"
+    data_fim = body.get("data_fim")  # "2026-09-22" (opcional, default 6 meses)
 
     grupo_id = str(uuid.uuid4())
     start = datetime.strptime(data_inicio, "%Y-%m-%d")
-    end = start + relativedelta(months=6)
+    end = datetime.strptime(data_fim, "%Y-%m-%d") if data_fim else start + relativedelta(months=6)
 
     # Coletar reservas existentes para checar conflito
     existing_reservas = arena.get("reservas", [])
