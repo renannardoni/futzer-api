@@ -419,6 +419,14 @@ async def add_recurrent_booking(
                 fresh_set.add(key)  # evitar duplicatas dentro do mesmo batch
         bookings = final_bookings
 
+    # Se TODOS conflitaram, rejeitar
+    if not bookings and conflitos:
+        raise HTTPException(409, {
+            "detail": "Todos os horários já estão reservados",
+            "conflitos": len(conflitos),
+            "conflitos_datas": conflitos[:10],
+        })
+
     if bookings:
         await db.quadras.update_one(
             {"_id": ObjectId(arena_id)},
@@ -429,7 +437,7 @@ async def add_recurrent_booking(
         "grupo_id": grupo_id,
         "count": len(bookings),
         "conflitos": len(conflitos),
-        "conflitos_datas": conflitos[:5],
+        "conflitos_datas": conflitos[:10],
         "bookings": bookings,
     }
 
