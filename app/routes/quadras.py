@@ -300,6 +300,14 @@ async def add_booking(
     if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
         raise HTTPException(403, "Sem permissão")
 
+    # Verificar conflito de horário
+    existing = [r for r in arena.get("reservas", [])
+                if r["quadra_id"] == body["quadra_id"]
+                and r["data"] == body["data"]
+                and r["hora"] == body["hora"]]
+    if existing:
+        raise HTTPException(409, f"Horário já reservado por {existing[0].get('nome_cliente', 'outro cliente')}")
+
     new_booking = {
         "id": str(uuid.uuid4()),
         "quadra_id": body["quadra_id"],
@@ -365,19 +373,29 @@ async def add_recurrent_booking(
     start = datetime.strptime(data_inicio, "%Y-%m-%d")
     end = start + relativedelta(months=6)
 
+    # Coletar reservas existentes para checar conflito
+    existing_reservas = arena.get("reservas", [])
+    existing_set = {(r["quadra_id"], r["data"], r["hora"]) for r in existing_reservas}
+
     bookings = []
+    conflitos = []
     current = start
     while current < end:
-        bookings.append({
-            "id": str(uuid.uuid4()),
-            "quadra_id": quadra_id,
-            "data": current.strftime("%Y-%m-%d"),
-            "hora": hora,
-            "nome_cliente": nome_cliente,
-            "telefone": telefone,
-            "recorrencia": recorrencia,
-            "recorrencia_grupo_id": grupo_id,
-        })
+        data_str = current.strftime("%Y-%m-%d")
+        key = (quadra_id, data_str, hora)
+        if key in existing_set:
+            conflitos.append(data_str)
+        else:
+            bookings.append({
+                "id": str(uuid.uuid4()),
+                "quadra_id": quadra_id,
+                "data": data_str,
+                "hora": hora,
+                "nome_cliente": nome_cliente,
+                "telefone": telefone,
+                "recorrencia": recorrencia,
+                "recorrencia_grupo_id": grupo_id,
+            })
         if recorrencia == "semanal":
             current += timedelta(weeks=1)
         elif recorrencia == "quinzenal":
@@ -393,7 +411,13 @@ async def add_recurrent_booking(
             {"$push": {"reservas": {"$each": bookings}},
              "$set": {"updated_at": datetime.utcnow()}}
         )
-    return {"grupo_id": grupo_id, "count": len(bookings), "bookings": bookings}
+    return {
+        "grupo_id": grupo_id,
+        "count": len(bookings),
+        "conflitos": len(conflitos),
+        "conflitos_datas": conflitos[:5],  # primeiras 5 para mostrar
+        "bookings": bookings,
+    }
 
 
 @router.delete("/{arena_id}/bookings/group/{grupo_id}", status_code=204)
