@@ -52,10 +52,10 @@ def _reserva_from_doc(d: dict) -> Reserva:
         telefone=d.get("telefone"),
     )
 
-def _to_quadra(q: dict) -> Quadra:
+def _to_quadra(q: dict, include_reservas: bool = True) -> Quadra:
     raw_horarios = q.get("horariosSemanais") or q.get("horarios_semanais")
     quadras_internas = [_subquadra_from_doc(sq) for sq in q.get("quadrasInternas", [])]
-    reservas = [_reserva_from_doc(r) for r in q.get("reservas", [])]
+    reservas = [_reserva_from_doc(r) for r in q.get("reservas", [])] if include_reservas else []
     return Quadra(
         id=str(q["_id"]),
         nome=q["nome"],
@@ -72,6 +72,7 @@ def _to_quadra(q: dict) -> Quadra:
         telefone=q.get("telefone"),
         owner_id=q.get("owner_id"),
         ativo=q.get("ativo", True),
+        mostrarDisponibilidade=q.get("mostrarDisponibilidade", q.get("mostrar_disponibilidade", False)),
         horariosSemanais=_horarios_from_doc(raw_horarios),
         datasBloqueadas=q.get("datasBloqueadas", q.get("datas_bloqueadas", [])),
         quadrasInternas=quadras_internas,
@@ -107,7 +108,7 @@ async def list_quadras(
         query["endereco.cidade"] = {"$regex": cidade, "$options": "i"}
     cursor = db.quadras.find(query).skip(skip).limit(limit)
     quadras = await cursor.to_list(length=limit)
-    return [_to_quadra(q) for q in quadras]
+    return [_to_quadra(q, include_reservas=False) for q in quadras]
 
 
 @router.get("/{quadra_id}", response_model=Quadra)
@@ -117,7 +118,9 @@ async def get_quadra(quadra_id: str, db=Depends(get_database)):
     quadra = await db.quadras.find_one({"_id": ObjectId(quadra_id)})
     if not quadra:
         raise HTTPException(status_code=404, detail="Quadra not found")
-    return _to_quadra(quadra)
+    # Se disponibilidade pública está desligada, não expor reservas
+    mostrar = quadra.get("mostrarDisponibilidade", quadra.get("mostrar_disponibilidade", False))
+    return _to_quadra(quadra, include_reservas=mostrar)
 
 
 @router.post("/", response_model=Quadra, status_code=status.HTTP_201_CREATED)
