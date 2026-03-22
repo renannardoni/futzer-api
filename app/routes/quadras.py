@@ -406,6 +406,20 @@ async def add_recurrent_booking(
             break
 
     if bookings:
+        # Re-ler arena para pegar estado mais recente (evitar race condition)
+        arena_fresh = await db.quadras.find_one({"_id": ObjectId(arena_id)})
+        fresh_set = {(r["quadra_id"], r["data"], r["hora"]) for r in arena_fresh.get("reservas", [])}
+        final_bookings = []
+        for b in bookings:
+            key = (b["quadra_id"], b["data"], b["hora"])
+            if key in fresh_set:
+                conflitos.append(b["data"])
+            else:
+                final_bookings.append(b)
+                fresh_set.add(key)  # evitar duplicatas dentro do mesmo batch
+        bookings = final_bookings
+
+    if bookings:
         await db.quadras.update_one(
             {"_id": ObjectId(arena_id)},
             {"$push": {"reservas": {"$each": bookings}},
@@ -415,7 +429,7 @@ async def add_recurrent_booking(
         "grupo_id": grupo_id,
         "count": len(bookings),
         "conflitos": len(conflitos),
-        "conflitos_datas": conflitos[:5],  # primeiras 5 para mostrar
+        "conflitos_datas": conflitos[:5],
         "bookings": bookings,
     }
 
