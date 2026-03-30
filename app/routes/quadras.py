@@ -20,17 +20,47 @@ def _norm_tipo(q: dict) -> str:
     raw = q.get("tipoPiso") or q.get("tipo_piso") or "futebol"
     return _TIPO_PISO_MAP.get(raw.lower().strip(), raw)
 
+def _normalize_slot(s) -> str:
+    """Converte slot legado (int) para formato 'HH:MM'. Strings já em HH:MM passam direto."""
+    if isinstance(s, int):
+        return f"{s:02d}:00"
+    return str(s)
+
 def _horarios_from_doc(raw) -> HorariosSemanais:
     if raw and isinstance(raw, dict):
         dias = {}
         for key in ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]:
             dia = raw.get(key, {})
             if isinstance(dia, dict) and "slots" in dia:
-                dias[key] = HorarioDia(slots=dia["slots"])
+                dias[key] = HorarioDia(slots=[_normalize_slot(s) for s in dia["slots"]])
             else:
                 dias[key] = HorarioDia(slots=[])
         return HorariosSemanais(**dias)
     return HorariosSemanais()
+
+
+def _slots_ocupados(hora_inicio: str, duracao: int) -> set:
+    """Gera o conjunto de slots de 15 min ocupados por uma reserva."""
+    h, m = map(int, hora_inicio.split(":"))
+    total_min = h * 60 + m
+    slots = set()
+    for offset in range(0, duracao, 15):
+        t = total_min + offset
+        slots.add(f"{t // 60:02d}:{t % 60:02d}")
+    return slots
+
+
+def _has_conflict(reservas: list, quadra_id: str, data: str, hora_inicio: str, duracao: int) -> dict | None:
+    """Retorna a reserva conflitante ou None."""
+    new_slots = _slots_ocupados(hora_inicio, duracao)
+    for r in reservas:
+        if r.get("quadra_id") != quadra_id or r.get("data") != data:
+            continue
+        r_inicio = r.get("hora_inicio") or f"{r.get('hora', 0):02d}:00"
+        r_dur = r.get("duracao", 60)
+        if _slots_ocupados(r_inicio, r_dur) & new_slots:
+            return r
+    return None
 
 def _subquadra_from_doc(d: dict) -> SubQuadra:
     return SubQuadra(
@@ -43,13 +73,21 @@ def _subquadra_from_doc(d: dict) -> SubQuadra:
     )
 
 def _reserva_from_doc(d: dict) -> Reserva:
+    # Retrocompatibilidade: campo legado 'hora' (int) → 'hora_inicio' (str)
+    hora_inicio = d.get("hora_inicio")
+    if not hora_inicio:
+        hora_int = d.get("hora", 0)
+        hora_inicio = f"{hora_int:02d}:00"
     return Reserva(
         id=d.get("id", ""),
         quadra_id=d.get("quadra_id", ""),
         data=d.get("data", ""),
-        hora=d.get("hora", 0),
+        hora_inicio=hora_inicio,
+        duracao=d.get("duracao", 60),
         nome_cliente=d.get("nome_cliente", ""),
         telefone=d.get("telefone"),
+        recorrencia=d.get("recorrencia"),
+        recorrencia_grupo_id=d.get("recorrencia_grupo_id"),
     )
 
 def _to_quadra(q: dict, include_reservas: bool = True) -> Quadra:
@@ -300,19 +338,27 @@ async def add_booking(
     if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
         raise HTTPException(403, "Sem permissão")
 
+    # Retrocompatibilidade: aceitar 'hora' (int legado) ou 'hora_inicio' (str novo)
+    hora_inicio = body.get("hora_inicio")
+    if not hora_inicio:
+        hora_int = body.get("hora")
+        if hora_int is not None:
+            hora_inicio = f"{int(hora_int):02d}:00"
+        else:
+            raise HTTPException(400, "hora_inicio é obrigatório")
+    duracao = body.get("duracao", 60)
+
     # Verificar conflito de horário
-    existing = [r for r in arena.get("reservas", [])
-                if r["quadra_id"] == body["quadra_id"]
-                and r["data"] == body["data"]
-                and r["hora"] == body["hora"]]
-    if existing:
-        raise HTTPException(409, f"Horário já reservado por {existing[0].get('nome_cliente', 'outro cliente')}")
+    conflito = _has_conflict(arena.get("reservas", []), body["quadra_id"], body["data"], hora_inicio, duracao)
+    if conflito:
+        raise HTTPException(409, f"Horário já reservado por {conflito.get('nome_cliente', 'outro cliente')}")
 
     new_booking = {
         "id": str(uuid.uuid4()),
         "quadra_id": body["quadra_id"],
         "data": body["data"],
-        "hora": body["hora"],
+        "hora_inicio": hora_inicio,
+        "duracao": duracao,
         "nome_cliente": body["nome_cliente"],
         "telefone": body.get("telefone"),
     }
@@ -363,7 +409,15 @@ async def add_recurrent_booking(
         raise HTTPException(403, "Sem permissão")
 
     quadra_id = body["quadra_id"]
-    hora = body["hora"]
+    # Retrocompatibilidade: aceitar 'hora' (int legado) ou 'hora_inicio' (str novo)
+    hora_inicio = body.get("hora_inicio")
+    if not hora_inicio:
+        hora_int = body.get("hora")
+        if hora_int is not None:
+            hora_inicio = f"{int(hora_int):02d}:00"
+        else:
+            raise HTTPException(400, "hora_inicio é obrigatório")
+    duracao = body.get("duracao", 60)
     nome_cliente = body["nome_cliente"]
     telefone = body.get("telefone")
     recorrencia = body["recorrencia"]  # "semanal" | "quinzenal" | "mensal"
@@ -374,29 +428,29 @@ async def add_recurrent_booking(
     start = datetime.strptime(data_inicio, "%Y-%m-%d")
     end = datetime.strptime(data_fim, "%Y-%m-%d") if data_fim else start + relativedelta(months=6)
 
-    # Coletar reservas existentes para checar conflito
     existing_reservas = arena.get("reservas", [])
-    existing_set = {(r["quadra_id"], r["data"], r["hora"]) for r in existing_reservas}
 
     bookings = []
     conflitos = []
     current = start
     while current < end:
         data_str = current.strftime("%Y-%m-%d")
-        key = (quadra_id, data_str, hora)
-        if key in existing_set:
+        if _has_conflict(existing_reservas, quadra_id, data_str, hora_inicio, duracao):
             conflitos.append(data_str)
         else:
-            bookings.append({
+            new_b = {
                 "id": str(uuid.uuid4()),
                 "quadra_id": quadra_id,
                 "data": data_str,
-                "hora": hora,
+                "hora_inicio": hora_inicio,
+                "duracao": duracao,
                 "nome_cliente": nome_cliente,
                 "telefone": telefone,
                 "recorrencia": recorrencia,
                 "recorrencia_grupo_id": grupo_id,
-            })
+            }
+            bookings.append(new_b)
+            existing_reservas.append(new_b)  # incluir no check para próximas iterações
         if recorrencia == "semanal":
             current += timedelta(weeks=1)
         elif recorrencia == "quinzenal":
@@ -409,15 +463,14 @@ async def add_recurrent_booking(
     if bookings:
         # Re-ler arena para pegar estado mais recente (evitar race condition)
         arena_fresh = await db.quadras.find_one({"_id": ObjectId(arena_id)})
-        fresh_set = {(r["quadra_id"], r["data"], r["hora"]) for r in arena_fresh.get("reservas", [])}
+        fresh_reservas = arena_fresh.get("reservas", [])
         final_bookings = []
         for b in bookings:
-            key = (b["quadra_id"], b["data"], b["hora"])
-            if key in fresh_set:
+            if _has_conflict(fresh_reservas, b["quadra_id"], b["data"], b["hora_inicio"], b["duracao"]):
                 conflitos.append(b["data"])
             else:
                 final_bookings.append(b)
-                fresh_set.add(key)  # evitar duplicatas dentro do mesmo batch
+                fresh_reservas.append(b)
         bookings = final_bookings
 
     # Se TODOS conflitaram, rejeitar

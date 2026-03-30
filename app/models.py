@@ -20,7 +20,7 @@ class PyObjectId(ObjectId):
         return {"type": "string"}
 
 class HorarioDia(BaseModel):
-    slots: List[int] = Field(default_factory=list)  # horas disponíveis ex: [8, 9, 14, 15]
+    slots: List[str] = Field(default_factory=list)  # horários disponíveis ex: ["08:00", "08:15", "08:30"]
 
 class HorariosSemanais(BaseModel):
     seg: HorarioDia = Field(default_factory=HorarioDia)
@@ -47,8 +47,9 @@ class SubQuadra(BaseModel):
 class Reserva(BaseModel):
     id: str = Field(default_factory=lambda: str(_uuid.uuid4()))
     quadra_id: str
-    data: str        # "2026-03-08"
-    hora: int        # 9
+    data: str           # "2026-03-08"
+    hora_inicio: str    # "08:00" (formato HH:MM)
+    duracao: int = 60   # duração em minutos (múltiplo de 15)
     nome_cliente: str
     telefone: Optional[str] = None
     recorrencia: Optional[str] = None          # "semanal" | "quinzenal" | "mensal"
