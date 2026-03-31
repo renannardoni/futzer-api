@@ -409,7 +409,6 @@ async def add_recurrent_booking(
         raise HTTPException(403, "Sem permissão")
 
     quadra_id = body["quadra_id"]
-    # Retrocompatibilidade: aceitar 'hora' (int legado) ou 'hora_inicio' (str novo)
     hora_inicio = body.get("hora_inicio")
     if not hora_inicio:
         hora_int = body.get("hora")
@@ -420,13 +419,22 @@ async def add_recurrent_booking(
     duracao = body.get("duracao", 60)
     nome_cliente = body["nome_cliente"]
     telefone = body.get("telefone")
-    recorrencia = body["recorrencia"]  # "semanal" | "quinzenal" | "mensal"
+    dias_semana = body.get("dias_semana", [])  # [0=seg, 1=ter, ..., 6=dom]
+    if not dias_semana or not isinstance(dias_semana, list):
+        raise HTTPException(400, "dias_semana é obrigatório (lista de 0-6)")
+    for d in dias_semana:
+        if d not in range(7):
+            raise HTTPException(400, f"dia_semana inválido: {d}")
     data_inicio = body["data_inicio"]  # "2026-03-22"
-    data_fim = body.get("data_fim")  # "2026-09-22" (opcional, default 6 meses)
+    data_fim = body.get("data_fim")  # opcional, default 1 ano
+
+    # Converter dias_semana (0=seg) para weekday do Python (0=monday)
+    # Já são iguais: 0=seg=monday, 6=dom=sunday
+    target_weekdays = set(dias_semana)
 
     grupo_id = str(uuid.uuid4())
     start = datetime.strptime(data_inicio, "%Y-%m-%d")
-    end = datetime.strptime(data_fim, "%Y-%m-%d") if data_fim else start + relativedelta(months=6)
+    end = datetime.strptime(data_fim, "%Y-%m-%d") if data_fim else start + relativedelta(years=1)
 
     existing_reservas = arena.get("reservas", [])
 
@@ -434,31 +442,25 @@ async def add_recurrent_booking(
     conflitos = []
     current = start
     while current < end:
-        data_str = current.strftime("%Y-%m-%d")
-        if _has_conflict(existing_reservas, quadra_id, data_str, hora_inicio, duracao):
-            conflitos.append(data_str)
-        else:
-            new_b = {
-                "id": str(uuid.uuid4()),
-                "quadra_id": quadra_id,
-                "data": data_str,
-                "hora_inicio": hora_inicio,
-                "duracao": duracao,
-                "nome_cliente": nome_cliente,
-                "telefone": telefone,
-                "recorrencia": recorrencia,
-                "recorrencia_grupo_id": grupo_id,
-            }
-            bookings.append(new_b)
-            existing_reservas.append(new_b)  # incluir no check para próximas iterações
-        if recorrencia == "semanal":
-            current += timedelta(weeks=1)
-        elif recorrencia == "quinzenal":
-            current += timedelta(weeks=2)
-        elif recorrencia == "mensal":
-            current += relativedelta(months=1)
-        else:
-            break
+        if current.weekday() in target_weekdays:
+            data_str = current.strftime("%Y-%m-%d")
+            if _has_conflict(existing_reservas, quadra_id, data_str, hora_inicio, duracao):
+                conflitos.append(data_str)
+            else:
+                new_b = {
+                    "id": str(uuid.uuid4()),
+                    "quadra_id": quadra_id,
+                    "data": data_str,
+                    "hora_inicio": hora_inicio,
+                    "duracao": duracao,
+                    "nome_cliente": nome_cliente,
+                    "telefone": telefone,
+                    "recorrencia": "mensalista",
+                    "recorrencia_grupo_id": grupo_id,
+                }
+                bookings.append(new_b)
+                existing_reservas.append(new_b)
+        current += timedelta(days=1)
 
     if bookings:
         # Re-ler arena para pegar estado mais recente (evitar race condition)

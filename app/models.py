@@ -52,7 +52,7 @@ class Reserva(BaseModel):
     duracao: int = 60   # duração em minutos (múltiplo de 15)
     nome_cliente: str
     telefone: Optional[str] = None
-    recorrencia: Optional[str] = None          # "semanal" | "quinzenal" | "mensal"
+    recorrencia: Optional[str] = None          # "mensalista"
     recorrencia_grupo_id: Optional[str] = None # UUID para agrupar reservas recorrentes
 
 class Coordenadas(BaseModel):
