@@ -391,6 +391,39 @@ async def delete_booking(
     )
 
 
+@router.put("/{arena_id}/bookings/{booking_id}")
+async def update_booking(
+    arena_id: str, booking_id: str, body: dict,
+    db=Depends(get_database),
+    current_user: User = Depends(get_current_active_user)
+):
+    from datetime import datetime
+    if not ObjectId.is_valid(arena_id):
+        raise HTTPException(400, "Invalid ID")
+    arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
+    if not arena:
+        raise HTTPException(404, "Arena not found")
+    if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
+        raise HTTPException(403, "Sem permissão")
+
+    update_fields = {}
+    for field in ["nome_cliente", "telefone", "valor", "hora_inicio", "duracao"]:
+        if field in body:
+            update_fields[f"reservas.$.{field}"] = body[field]
+
+    if not update_fields:
+        raise HTTPException(400, "Nenhum campo para atualizar")
+
+    update_fields["updated_at"] = datetime.utcnow()
+    result = await db.quadras.update_one(
+        {"_id": ObjectId(arena_id), "reservas.id": booking_id},
+        {"$set": update_fields}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Reserva não encontrada")
+    return {"ok": True}
+
+
 @router.post("/{arena_id}/bookings/recurrent", status_code=201)
 async def add_recurrent_booking(
     arena_id: str, body: dict,
