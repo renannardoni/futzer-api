@@ -406,8 +406,23 @@ async def update_booking(
     if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
         raise HTTPException(403, "Sem permissão")
 
+    # Se está movendo (mudando data ou hora), verificar conflito
+    if "data" in body or "hora_inicio" in body:
+        booking = next((r for r in arena.get("reservas", []) if r["id"] == booking_id), None)
+        if not booking:
+            raise HTTPException(404, "Reserva não encontrada")
+        new_data = body.get("data", booking["data"])
+        new_hora = body.get("hora_inicio", booking.get("hora_inicio", ""))
+        new_duracao = body.get("duracao", booking.get("duracao", 60))
+        conflito = _has_conflict(
+            [r for r in arena.get("reservas", []) if r["id"] != booking_id],
+            booking["quadra_id"], new_data, new_hora, new_duracao
+        )
+        if conflito:
+            raise HTTPException(409, f"Horário já reservado por {conflito.get('nome_cliente', 'outro cliente')}")
+
     update_fields = {}
-    for field in ["nome_cliente", "telefone", "valor", "hora_inicio", "duracao"]:
+    for field in ["nome_cliente", "telefone", "valor", "hora_inicio", "duracao", "data"]:
         if field in body:
             update_fields[f"reservas.$.{field}"] = body[field]
 
