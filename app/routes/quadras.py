@@ -361,6 +361,7 @@ async def add_booking(
         "duracao": duracao,
         "nome_cliente": body["nome_cliente"],
         "telefone": body.get("telefone"),
+        "valor": body.get("valor"),
     }
     await db.quadras.update_one(
         {"_id": ObjectId(arena_id)},
@@ -455,6 +456,7 @@ async def add_recurrent_booking(
                     "duracao": duracao,
                     "nome_cliente": nome_cliente,
                     "telefone": telefone,
+                    "valor": body.get("valor"),
                     "recorrencia": "mensalista",
                     "recorrencia_grupo_id": grupo_id,
                 }
