@@ -111,6 +111,7 @@ def _to_quadra(q: dict, include_reservas: bool = True) -> Quadra:
         owner_id=q.get("owner_id"),
         ativo=q.get("ativo", True),
         mostrarDisponibilidade=q.get("mostrarDisponibilidade", q.get("mostrar_disponibilidade", False)),
+        duracaoMinima=q.get("duracaoMinima", q.get("duracao_minima")),
         horariosSemanais=_horarios_from_doc(raw_horarios),
         datasBloqueadas=q.get("datasBloqueadas", q.get("datas_bloqueadas", [])),
         quadrasInternas=quadras_internas,
