@@ -20,11 +20,11 @@ def _norm_tipo(q: dict) -> str:
     raw = q.get("tipoPiso") or q.get("tipo_piso") or "futebol"
     return _TIPO_PISO_MAP.get(raw.lower().strip(), raw)
 
-def _normalize_slot(s) -> str:
-    """Converte slot legado (int) para formato 'HH:MM'. Strings já em HH:MM passam direto."""
+def _expand_slot(s) -> list:
+    """Converte slot legado (int hora cheia) em 4 slots de 15 min. Strings HH:MM passam como lista unitária."""
     if isinstance(s, int):
-        return f"{s:02d}:00"
-    return str(s)
+        return [f"{s:02d}:{m:02d}" for m in (0, 15, 30, 45)]
+    return [str(s)]
 
 def _horarios_from_doc(raw) -> HorariosSemanais:
     if raw and isinstance(raw, dict):
@@ -32,7 +32,10 @@ def _horarios_from_doc(raw) -> HorariosSemanais:
         for key in ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]:
             dia = raw.get(key, {})
             if isinstance(dia, dict) and "slots" in dia:
-                dias[key] = HorarioDia(slots=[_normalize_slot(s) for s in dia["slots"]])
+                expanded = []
+                for s in dia["slots"]:
+                    expanded.extend(_expand_slot(s))
+                dias[key] = HorarioDia(slots=sorted(set(expanded)))
             else:
                 dias[key] = HorarioDia(slots=[])
         return HorariosSemanais(**dias)
