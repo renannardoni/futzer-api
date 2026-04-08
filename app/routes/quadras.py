@@ -583,6 +583,62 @@ async def add_recurrent_booking(
     }
 
 
+@router.put("/{arena_id}/bookings/group/{grupo_id}")
+async def update_booking_group(
+    arena_id: str, grupo_id: str, body: dict,
+    db=Depends(get_database),
+    current_user: User = Depends(get_current_active_user)
+):
+    from datetime import datetime
+    if not ObjectId.is_valid(arena_id):
+        raise HTTPException(400, "Invalid ID")
+    arena = await db.quadras.find_one({"_id": ObjectId(arena_id)})
+    if not arena:
+        raise HTTPException(404, "Arena not found")
+    if current_user.id != "admin" and arena.get("owner_id") != current_user.id:
+        raise HTTPException(403, "Sem permissão")
+
+    reservas = arena.get("reservas", [])
+    grupo = [r for r in reservas if r.get("recorrencia_grupo_id") == grupo_id]
+    if not grupo:
+        raise HTTPException(404, "Grupo não encontrado")
+
+    # Campos atualizáveis (data excluída — cada reserva mantém sua data)
+    update_fields = {}
+    for field in ["nome_cliente", "telefone", "valor", "hora_inicio", "duracao"]:
+        if field in body:
+            update_fields[field] = body[field]
+    if not update_fields:
+        raise HTTPException(400, "Nenhum campo para atualizar")
+
+    hora_changed = "hora_inicio" in update_fields or "duracao" in update_fields
+    new_hora = update_fields.get("hora_inicio")
+    new_duracao = update_fields.get("duracao")
+
+    updated = 0
+    conflitos = []
+    for r in grupo:
+        r_hora = new_hora or r.get("hora_inicio", "")
+        r_duracao = new_duracao or r.get("duracao", 60)
+        # Se hora/duracao mudou, verificar conflito (excluindo a própria reserva)
+        if hora_changed:
+            others = [o for o in reservas if o["id"] != r["id"]]
+            if _has_conflict(others, r["quadra_id"], r["data"], r_hora, r_duracao):
+                conflitos.append(r["data"])
+                continue
+
+        set_ops = {f"reservas.$[r].{k}": v for k, v in update_fields.items()}
+        set_ops["updated_at"] = datetime.utcnow()
+        await db.quadras.update_one(
+            {"_id": ObjectId(arena_id)},
+            {"$set": set_ops},
+            array_filters=[{"r.id": r["id"]}]
+        )
+        updated += 1
+
+    return {"updated": updated, "conflitos": len(conflitos), "conflitos_datas": conflitos[:10]}
+
+
 @router.delete("/{arena_id}/bookings/group/{grupo_id}", status_code=204)
 async def delete_booking_group(
     arena_id: str, grupo_id: str,
