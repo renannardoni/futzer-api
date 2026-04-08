@@ -20,39 +20,63 @@ def _norm_tipo(q: dict) -> str:
     raw = q.get("tipoPiso") or q.get("tipo_piso") or "futebol"
     return _TIPO_PISO_MAP.get(raw.lower().strip(), raw)
 
-def _expand_slot(s) -> list:
-    """Converte slot legado (int ou string hora cheia) em 4 slots de 15 min."""
+def _expand_slot(s, step: int = 15) -> list:
+    """Converte slot legado (int ou string hora cheia) usando o step da arena."""
     if isinstance(s, int):
-        return [f"{s:02d}:{m:02d}" for m in (0, 15, 30, 45)]
+        return [f"{s:02d}:{m:02d}" for m in range(0, 60, step) if step <= 60] or [f"{s:02d}:00"]
     s = str(s)
-    # String de hora cheia ("08:00", "14:00") → expandir em 4 slots de 15 min
-    if len(s) == 5 and s[2] == ":" and s.endswith(":00"):
+    # String de hora cheia ("08:00", "14:00") → expandir com step
+    if len(s) == 5 and s[2] == ":" and s.endswith(":00") and step <= 60 and 60 % step == 0:
         h = int(s[:2])
-        return [f"{h:02d}:{m:02d}" for m in (0, 15, 30, 45)]
+        return [f"{h:02d}:{m:02d}" for m in range(0, 60, step)]
     return [s]
 
-def _horarios_from_doc(raw) -> HorariosSemanais:
+
+def _horarios_from_doc(raw, step: int = 15) -> HorariosSemanais:
     if raw and isinstance(raw, dict):
         dias = {}
         for key in ["seg", "ter", "qua", "qui", "sex", "sab", "dom"]:
             dia = raw.get(key, {})
             if isinstance(dia, dict) and "slots" in dia:
-                expanded = []
-                for s in dia["slots"]:
-                    expanded.extend(_expand_slot(s))
-                dias[key] = HorarioDia(slots=sorted(set(expanded)))
+                raw_slots = dia["slots"]
+                # Para steps que não dividem 60 (45, 75, 90, 120): gerar a partir do range
+                if step > 60 or 60 % step != 0:
+                    # Detectar range: converter todos os slots para minutos e gerar de step em step
+                    mins = []
+                    for s in raw_slots:
+                        if isinstance(s, int):
+                            mins.append(s * 60)
+                        else:
+                            parts = str(s).split(":")
+                            mins.append(int(parts[0]) * 60 + int(parts[1]))
+                    if mins:
+                        start_min = min(mins)
+                        end_min = max(mins) + 60  # assumir que o último slot cobre 1h
+                        slots = []
+                        t = start_min
+                        while t < end_min:
+                            slots.append(f"{t // 60:02d}:{t % 60:02d}")
+                            t += step
+                        dias[key] = HorarioDia(slots=slots)
+                    else:
+                        dias[key] = HorarioDia(slots=[])
+                else:
+                    expanded = []
+                    for s in raw_slots:
+                        expanded.extend(_expand_slot(s, step))
+                    dias[key] = HorarioDia(slots=sorted(set(expanded)))
             else:
                 dias[key] = HorarioDia(slots=[])
         return HorariosSemanais(**dias)
     return HorariosSemanais()
 
 
-def _slots_ocupados(hora_inicio: str, duracao: int) -> set:
-    """Gera o conjunto de slots de 15 min ocupados por uma reserva."""
+def _slots_ocupados(hora_inicio: str, duracao: int, step: int = 15) -> set:
+    """Gera o conjunto de slots ocupados por uma reserva, usando o step da arena."""
     h, m = map(int, hora_inicio.split(":"))
     total_min = h * 60 + m
     slots = set()
-    for offset in range(0, duracao, 15):
+    for offset in range(0, duracao, step):
         t = total_min + offset
         slots.add(f"{t // 60:02d}:{t % 60:02d}")
     return slots
@@ -70,14 +94,14 @@ def _has_conflict(reservas: list, quadra_id: str, data: str, hora_inicio: str, d
             return r
     return None
 
-def _subquadra_from_doc(d: dict) -> SubQuadra:
+def _subquadra_from_doc(d: dict, step: int = 15) -> SubQuadra:
     return SubQuadra(
         id=d.get("id", ""),
         nome=d.get("nome", "Quadra"),
         tipoPiso=d.get("tipoPiso", "futebol"),
         cobertura=d.get("cobertura", "descoberto"),
         imagemCapa=d.get("imagemCapa"),
-        horariosSemanais=_horarios_from_doc(d.get("horariosSemanais")),
+        horariosSemanais=_horarios_from_doc(d.get("horariosSemanais"), step),
     )
 
 def _reserva_from_doc(d: dict) -> Reserva:
@@ -100,7 +124,8 @@ def _reserva_from_doc(d: dict) -> Reserva:
 
 def _to_quadra(q: dict, include_reservas: bool = True) -> Quadra:
     raw_horarios = q.get("horariosSemanais") or q.get("horarios_semanais")
-    quadras_internas = [_subquadra_from_doc(sq) for sq in q.get("quadrasInternas", [])]
+    step = q.get("discretizacaoMinima", q.get("discretizacao_minima")) or 15
+    quadras_internas = [_subquadra_from_doc(sq, step) for sq in q.get("quadrasInternas", [])]
     reservas = [_reserva_from_doc(r) for r in q.get("reservas", [])] if include_reservas else []
     return Quadra(
         id=str(q["_id"]),
@@ -120,7 +145,8 @@ def _to_quadra(q: dict, include_reservas: bool = True) -> Quadra:
         ativo=q.get("ativo", True),
         mostrarDisponibilidade=q.get("mostrarDisponibilidade", q.get("mostrar_disponibilidade", False)),
         duracaoMinima=q.get("duracaoMinima", q.get("duracao_minima")),
-        horariosSemanais=_horarios_from_doc(raw_horarios),
+        discretizacaoMinima=step,
+        horariosSemanais=_horarios_from_doc(raw_horarios, step),
         datasBloqueadas=q.get("datasBloqueadas", q.get("datas_bloqueadas", [])),
         quadrasInternas=quadras_internas,
         reservas=reservas,

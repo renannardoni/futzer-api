@@ -83,6 +83,7 @@ class QuadraBase(BaseModel):
     ativo: bool = True
     mostrar_disponibilidade: bool = Field(False, alias="mostrarDisponibilidade")
     duracao_minima: Optional[int] = Field(None, alias="duracaoMinima")
+    discretizacao_minima: Optional[int] = Field(15, alias="discretizacaoMinima")
     horarios_semanais: HorariosSemanais = Field(default_factory=HorariosSemanais, alias="horariosSemanais")
     datas_bloqueadas: List[str] = Field(default_factory=list, alias="datasBloqueadas")
     quadras_internas: List[SubQuadra] = Field(default_factory=list, alias="quadrasInternas")
@@ -110,6 +111,7 @@ class QuadraUpdate(BaseModel):
     ativo: Optional[bool] = None
     mostrar_disponibilidade: Optional[bool] = Field(None, alias="mostrarDisponibilidade")
     duracao_minima: Optional[int] = Field(None, alias="duracaoMinima")
+    discretizacao_minima: Optional[int] = Field(None, alias="discretizacaoMinima")
     horarios_semanais: Optional[HorariosSemanais] = Field(None, alias="horariosSemanais")
     datas_bloqueadas: Optional[List[str]] = Field(None, alias="datasBloqueadas")
 
