@@ -21,10 +21,15 @@ def _norm_tipo(q: dict) -> str:
     return _TIPO_PISO_MAP.get(raw.lower().strip(), raw)
 
 def _expand_slot(s) -> list:
-    """Converte slot legado (int hora cheia) em 4 slots de 15 min. Strings HH:MM passam como lista unitária."""
+    """Converte slot legado (int ou string hora cheia) em 4 slots de 15 min."""
     if isinstance(s, int):
         return [f"{s:02d}:{m:02d}" for m in (0, 15, 30, 45)]
-    return [str(s)]
+    s = str(s)
+    # String de hora cheia ("08:00", "14:00") → expandir em 4 slots de 15 min
+    if len(s) == 5 and s[2] == ":" and s.endswith(":00"):
+        h = int(s[:2])
+        return [f"{h:02d}:{m:02d}" for m in (0, 15, 30, 45)]
+    return [s]
 
 def _horarios_from_doc(raw) -> HorariosSemanais:
     if raw and isinstance(raw, dict):
